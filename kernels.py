@@ -50,7 +50,10 @@ def _cdot(a_re, a_im, b_re, b_im):
 
     TODO: implement.
     """
-    pass
+    y_re = t1.dot(a_re, b_re, out_dtype=t1.float32) - t1.dot(a_im, b_im, out_dtype=t1.float32)
+    y_im = t1.dot(a_re, b_im, out_dtype=t1.float32) - t1.dot(a_im, b_re, out_dtype=t1.float32)
+
+    return y_re, y_im
 
 
 # =============================================================================
@@ -68,7 +71,18 @@ def f6_factor(N: int) -> list[int]:
         65536 -> [256, 256]         1048576 -> [256, 256, 16]
         64 -> [16, 4]               2 -> [2]
     """
-    raise NotImplementedError("TODO: implement f6_factor")
+    chunks = []
+    while N > 1:
+        if N % 256 == 0:
+            chunks.append(256)
+            N //= 256
+        elif N % 16 == 0:
+            chunks.append(16)
+            N //= 16
+        else:
+            chunks.append(N)
+            N = 1
+    return chunks
 
 
 f7_factor = f6_factor   # F7 reuses F6's chunk recipe
