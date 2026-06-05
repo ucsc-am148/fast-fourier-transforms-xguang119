@@ -33,7 +33,12 @@ def make_radix2_twiddles(
     Used by the radix-2 butterfly: stage s reads twiddle at index
     (k & (2**s - 1)) * (N >> (s+1)), so the table only needs the lower half
     of one full period."""
-    raise NotImplementedError("TODO: implement make_radix2_twiddles")
+    k = torch.arange(N // 2, device = device, dtype=torch.float32)
+    angle = -2 * math.pi * k / N
+    tw_re = torch.cos(angle).to(dtype)
+    tw_im = torch.sin(angle).to(dtype)
+
+    return tw_re, tw_im
 
 
 # =============================================================================
@@ -79,7 +84,32 @@ def make_radix16_twiddles(
     where e_{L-1-j}_value(c) reads the base-16 digit of c at the position
     given by _column_axis_labeling(L)[s].
     """
-    raise NotImplementedError("TODO: implement make_radix16_twiddles")
+    L = round(math.log(N, 16))
+    col = N // 16
+    labels = _column_axis_labeling(L)
+
+    tw_re = torch.zeros(L, 16, col, dtype=torch.float16, device=device)
+    tw_im = torch.zeros(L, 16, col, dtype=torch.float16, device=device)
+
+    tw_re[0] = 1.0
+
+    for s in range(1, L):
+        denom = float(16 ** (s+1))
+
+        c = torch.arange(col, dtype=torch.float32, device=device)
+        t = torch.zeros(col, dtype=torch.float32, device=device)
+        for i in range(s):
+            digit = (c.long() // (16 ** i)) % 16
+            t = t + digit.float() * (16 ** i)
+
+        m = torch.arange(16, dtype=torch.float32, device=device)
+
+        angle = -2 * math.pi * m.unsqueeze(1) * t.unsqueeze(0) / denom
+
+        tw_re[s] = angle.cos().to(torch.float16)
+        tw_im[s] = angle.sin().to(torch.float16)
+
+    return tw_re, tw_im
 
 
 # =============================================================================
@@ -100,7 +130,13 @@ def make_bailey_cross_twiddles(
     F5/F6/F7 call it with dtype=torch.float16 (the tcFFT tier is fp16). The
     Bailey identity holds for any N >= m0 * M; in practice N == m0 * M.
     """
-    raise NotImplementedError("TODO: implement make_bailey_cross_twiddles")
+    n1 = torch.arange(m0, dtype=torch.float32, device=device).unsqueeze(1)
+    kM = torch.arange(M, dtype=torch.float32, device=device).unsqueeze(0)
+    angle = -2 * math.pi / N * n1 * kM
+    W_re = angle.cos().to(dtype)
+    W_im = angle.sin().to(dtype)
+
+    return W_re, W_im
 
 
 # =============================================================================
@@ -116,7 +152,12 @@ def make_dft_matrix(
 
     W[j, k] = exp(-2*pi*i * j * k / N). Used by F1 (DFT-as-complex-matmul).
     """
-    raise NotImplementedError("TODO: implement make_dft_matrix")
+    j = torch.arange(N, dtype=torch.float32, device=device).unsqueeze(1)
+    k = torch.arange(N, dtype=torch.float32, device=device).unsqueeze(0)
+    angle = -2.0 * math.pi / N * j * k
+    W_re = angle.cos().to(dtype)
+    W_im = angle.sin().to(dtype)
+    return W_re, W_im
 
 
 def make_dft_R_padded(
@@ -129,7 +170,18 @@ def make_dft_R_padded(
     first R columns are F_R (rows wrap mod R), take the first R output rows.
     This makes the >=16x16 tl.dot requirement hold for all R in {2, 4, 8, 16}.
     """
-    raise NotImplementedError("TODO: implement make_dft_R_padded")
+    j = torch.arange(16, dtype=torch.float32, device=device).unsqueeze(1)
+    k = torch.arange(R, dtype=torch.float32, device=device).unsqueeze(0)
+
+    angle = -2.0 * math.pi / R * (j % R) * k
+
+    M_re = torch.zeros((16, 16), dtype=torch.float16, device=device)
+    M_im = torch.zeros((16, 16), dtype=torch.float16, device=device)
+
+    M_re[:, :R] = angle.cos()
+    M_im[:, :R] = angle.sin()
+
+    return M_re, M_im
 
 
 def bit_reversal_perm(N: int, device: str = 'cuda') -> torch.Tensor:
@@ -138,4 +190,6 @@ def bit_reversal_perm(N: int, device: str = 'cuda') -> torch.Tensor:
     rev[i] is the integer whose n_bits=log2(N) binary representation is i's
     bits in reversed order.
     """
-    raise NotImplementedError("TODO: implement bit_reversal_perm")
+    n_bits = round(math.log2(N))
+    result = [int(f'{i:0{n_bits}b}'[::-1], 2) for i in range(N)]
+    return torch.tensor(result, dtype=torch.int32, device=device)
